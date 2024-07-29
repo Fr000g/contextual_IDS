@@ -4,29 +4,33 @@ import (
 	"encoding/csv"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
-	"sort"
 	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
 type SensorContent struct {
-	Title     string      `json:"title,omitempty"`
-	Value     interface{} `json:"value,omitempty"`
-	Timestamp int64       `json:"timestamp,omitempty"`
+	Id      string      `json:"id"`
+	Value   interface{} `json:"v"`
+	Quality bool        `json:"q"`
+	Time    int64       `json:"t"`
+}
+
+type Sensors struct {
+	Timestamp int64           `json:"timestamp"`
+	Values    []SensorContent `json:"values"`
 }
 
 var (
 	fileFlag string
-	column   []string
+	columns  []string
 )
 
 func init() {
-	now := time.Now().Format("01-02 15:04:05")
+	now := time.Now().Format("01-02_15-04-05")
 	flag.StringVar(&fileFlag, "f", now+".csv", "set the output file")
 }
 
@@ -38,46 +42,67 @@ func main() {
 }
 
 func sensorHandler(c *gin.Context) {
-	var sensors map[string]SensorContent
+	var sensors Sensors
 	if err := c.ShouldBindJSON(&sensors); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "InternalServerError"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON"})
 		return
 	}
 
 	file, err := os.OpenFile(fileFlag, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "InternalServerError"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to open file"})
 		return
 	}
 	defer file.Close()
 
-	columnLength := len(column)
-	if columnLength == 0 {
-		CreateColum(file, sensors)
+	if len(columns) == 0 {
+		err := createColumns(file, sensors)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create columns"})
+			return
+		}
 	}
 
-	var records []string
-	for _, c := range column {
-		records = append(records, fmt.Sprint(sensors[c].Value))
+	err = writeRecord(file, sensors)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to write record"})
+		return
 	}
-
-	writer := csv.NewWriter(file)
-	defer writer.Flush()
-
-	writer.Write(records)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "ok",
-		"len":     columnLength,
+		"len":     len(columns),
 	})
 }
 
-func CreateColum(file io.Writer, sensors map[string]SensorContent) error {
-	for key := range sensors {
-		column = append(column, key)
+func createColumns(file *os.File, sensors Sensors) error {
+	columns = append(columns, "time")
+	for _, v := range sensors.Values {
+		columns = append(columns, v.Id)
 	}
-	sort.Strings(column)
+
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
-	return writer.Write(column)
+
+	return writer.Write(columns)
+}
+
+func writeRecord(file *os.File, sensors Sensors) error {
+	record := make([]string, len(columns))
+
+	// Add current time to the first column
+	record[0] = time.Now().Format("15:04:05.000")
+	for _, value := range sensors.Values {
+		for i, col := range columns {
+			if col == value.Id {
+				record[i] = fmt.Sprintf("%v", value.Value)
+				break
+			}
+		}
+	}
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	return writer.Write(record)
 }
