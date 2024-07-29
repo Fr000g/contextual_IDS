@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -27,6 +28,7 @@ type Sensors struct {
 var (
 	fileFlag string
 	columns  []string
+	colMutex sync.RWMutex
 )
 
 func init() {
@@ -55,12 +57,22 @@ func sensorHandler(c *gin.Context) {
 	}
 	defer file.Close()
 
+	colMutex.RLock()
 	if len(columns) == 0 {
-		err := createColumns(file, sensors)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create columns"})
-			return
+		colMutex.RUnlock()
+		colMutex.Lock()
+		// Double check in case columns were initialized between RUnlock and Lock
+		if len(columns) == 0 {
+			err := createColumns(file, sensors)
+			if err != nil {
+				colMutex.Unlock()
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create columns"})
+				return
+			}
 		}
+		colMutex.Unlock()
+	} else {
+		colMutex.RUnlock()
 	}
 
 	err = writeRecord(file, sensors)
@@ -88,6 +100,9 @@ func createColumns(file *os.File, sensors Sensors) error {
 }
 
 func writeRecord(file *os.File, sensors Sensors) error {
+	colMutex.RLock()
+	defer colMutex.RUnlock()
+
 	record := make([]string, len(columns))
 
 	// Add current time to the first column
