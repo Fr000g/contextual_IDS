@@ -308,7 +308,7 @@ func writeRecord(file *os.File, sensors Sensors) error {
 	record := make([]string, len(columns))
 
 	// Add current time to the first column
-	record[0] = time.Now().Format("15:04:05.000")
+	record[0] = time.Now().Format("2006-01-02 15:04:05.000")
 	for _, value := range sensors.Values {
 		for i, col := range columns {
 			if col == value.Id {

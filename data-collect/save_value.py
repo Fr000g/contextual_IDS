@@ -12,7 +12,7 @@ ser = serial.Serial(serial_port, baud_rate, timeout=timeout)
 
 # 打开CSV文件以便写入
 csv_file = str(datetime.datetime.now().strftime('%Y%m%d-%H:%M:%S')) + '.csv'
-fieldnames = ['timestamp', 'AX1', 'AY1', 'AZ1', 'AX2', 'AY2', 'AZ2', 'Light', 'Sound1', 'Sound2']
+fieldnames = ['time', 'AX1', 'AY1', 'AZ1', 'AX2', 'AY2', 'AZ2', 'Light', 'Sound1', 'Sound2']
 
 with open(csv_file, mode='w', newline='') as file:
     writer = csv.DictWriter(file, fieldnames=fieldnames)
@@ -42,11 +42,11 @@ with open(csv_file, mode='w', newline='') as file:
                     sound2 = int(parts[8].split(':')[1])
 
                     # 获取当前时间戳
-                    timestamp = datetime.datetime.now().strftime('%H:%M:%S.%f')
+                    timestamp = datetime.datetime.now().strftime('%Y%m%d %H:%M:%S.%f')
 
                     # 写入CSV文件
                     writer.writerow({
-                        'timestamp': timestamp,
+                        'time': timestamp,
                         'AX1': ax1,
                         'AY1': ay1,
                         'AZ1': az1,
